@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 
 ##############################################################################
 ## Change the GRADLE_USER_HOME path to the current folder
