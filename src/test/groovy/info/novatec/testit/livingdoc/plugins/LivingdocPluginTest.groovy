@@ -5,12 +5,12 @@ import org.gradle.api.*
 import org.gradle.testfixtures.ProjectBuilder
 
 /**
- * The test class for the {@link LivingDocPlugin}
+ * The test class for the {@link LivingdocPlugin}
  *
  * @author Nikolay Nachev (NovaTec Consulting GmbH)
  *
  */
-class LivingDocPluginTest extends Specification {
+class LivingdocPluginTest extends Specification {
 
     Project project = ProjectBuilder.builder().build()
 
@@ -21,7 +21,7 @@ class LivingDocPluginTest extends Specification {
         }.size() == 0
 
         when:
-        project.apply plugin: LivingDocPlugin
+        project.apply plugin: LivingdocPlugin
 
         then:
         project.sourceSets.size() == 3
@@ -32,7 +32,7 @@ class LivingDocPluginTest extends Specification {
 
     def "add two fixture configurations and check that the sourceSets are created"() {
         when:
-        project.apply plugin: LivingDocPlugin
+        project.apply plugin: LivingdocPlugin
         project.livingdoc {
             fixtures {
                 intTest {

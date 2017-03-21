@@ -3,7 +3,7 @@ package info.novatec.testit.livingdoc.dsl
 /**
  * Created by nni on 08.07.16.
  */
-class RepositoryFixtureFilterDsl {
+class RepositorySortFilterDsl {
 
   public String name
 
@@ -11,7 +11,7 @@ class RepositoryFixtureFilterDsl {
 
   public String filter
 
-  public RepositoryFixtureFilterDsl(String name) {
+  public RepositorySortFilterDsl(String name) {
     this.name = name
   }
 }

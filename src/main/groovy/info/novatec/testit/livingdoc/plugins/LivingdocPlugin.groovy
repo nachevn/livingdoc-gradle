@@ -1,14 +1,13 @@
 package info.novatec.testit.livingdoc.plugins
 
-import info.novatec.testit.livingdoc.conventions.LivingDocPluginConvention
+import info.novatec.testit.livingdoc.plugins.conventions.LivingdocPluginConvention
 import info.novatec.testit.livingdoc.dsl.*
 import info.novatec.testit.livingdoc.tasks.ExecLivingdoc
-import info.novatec.testit.livingdoc.tasks.FreezeTask
+import info.novatec.testit.livingdoc.tasks.FreezeSpecifications
 import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.Task
-import org.gradle.api.file.FileCollection
 import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
 import org.gradle.api.plugins.ExtensionAware
@@ -17,7 +16,7 @@ import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.bundling.Jar
 import org.gradle.internal.reflect.Instantiator
 
-class LivingDocPlugin implements Plugin<Project> {
+class LivingdocPlugin implements Plugin<Project> {
 
 	private Project project
 
@@ -29,13 +28,13 @@ class LivingDocPlugin implements Plugin<Project> {
 
 	NamedDomainObjectContainer<RepositoryDsl> repositoriesContainer
 
-	Logger logger = Logging.getLogger(LivingDocPlugin.class)
+	Logger logger = Logging.getLogger(LivingdocPlugin.class)
 
 	@Override
 	public void apply(Project project) {
 		this.project = project
 		this.project.apply(plugin: JavaPlugin)
-		this.project.convention.plugins.livingDoc = new LivingDocPluginConvention()
+		this.project.convention.plugins.livingDoc = new LivingdocPluginConvention()
 		this.livingdocDefaultSourceSet = this.createDefaultSourceSet()
 
 		this.livingDocExtension = this.project.extensions.create(this.project.LIVINGDOC_SOURCESET_NAME, LivingDocContainerDsl, this.project)
@@ -55,20 +54,20 @@ class LivingDocPlugin implements Plugin<Project> {
 			RepositoryDsl repository = this.project.gradle.services.get(Instantiator).newInstance(RepositoryDsl, name, this.project)
 			assert repository instanceof ExtensionAware
 
-			repository.sortfilter = this.project.container(RepositoryFixtureFilterDsl)
+			repository.sortfilter = this.project.container(RepositorySortFilterDsl)
 
 			return repository
 		}
 
 		this.project.afterEvaluate {
-			Map<RepositoryFixtureFilterDsl, RepositoryDsl> repositoryFixtureFilters = this.getRepositoryFixtureFilters()
-			repositoryFixtureFilters.each { RepositoryFixtureFilterDsl filterDsl, RepositoryDsl repository ->
-				logger.info("Create a freeze task for repository {} and fixture filter with paht {}", repository.name, filterDsl.path)
+			Map<RepositorySortFilterDsl, RepositoryDsl> repositoryFixtureFilters = this.getRepositorySortFilters()
+			repositoryFixtureFilters.each { RepositorySortFilterDsl filterDsl, RepositoryDsl repository ->
+				logger.info("Create freeze task for repository {} with sort filter (path: '{}', filter: '{}')", repository.name, filterDsl.path, filterDsl.filter)
 				this.createFreezeTask(repository, filterDsl)
 			}
 			this.fixturesContainer.each { FixtureDsl fixture ->
-				FreezeTask freezeTaskForFixture = this.checkFixturePrerequisite(fixture, repositoryFixtureFilters)
-				this.configureSourceSet(fixture)
+				FreezeSpecifications freezeTaskForFixture = this.checkFixturePrerequisite(fixture, repositoryFixtureFilters)
+				this.configureFixtureSourceSet(fixture)
 				ExecLivingdoc runSpecsTask = this.createExecLivingdocTasks(this.project.tasks."compile${fixture.name.capitalize()}Jar", freezeTaskForFixture, fixture)
 				runSpecsTask.dependsOn this.project.tasks."compile${fixture.name.capitalize()}Jar"
 			}
@@ -126,8 +125,8 @@ class LivingDocPlugin implements Plugin<Project> {
 	/**
 	 * This method is executed after the Gradle build file of the project is fully initialized
 	 */
-	private configureSourceSet(FixtureDsl fixture) {
-		SourceSet fixtureSourceSet = this.getFixtureSourceSet(fixture)
+	private configureFixtureSourceSet(FixtureDsl fixture) {
+		SourceSet fixtureSourceSet = this.getSourceSetForFixture(fixture)
 		this.project.configure(fixtureSourceSet) {
 			logger.info("Configure sourceSet {}", fixtureSourceSet.name)
 			logger.info("{} fixtureSourceDirectory is {}", fixtureSourceSet.name, fixture.fixtureSourceDirectory?.path)
@@ -150,7 +149,7 @@ class LivingDocPlugin implements Plugin<Project> {
 	 * @return the jar task
 	 */
 	private Jar createCompileFixturesTask(FixtureDsl fixture) {
-		SourceSet fixtureSourceSet = this.getFixtureSourceSet(fixture)
+		SourceSet fixtureSourceSet = this.getSourceSetForFixture(fixture)
 		Jar compileFixturesTask = this.project.tasks.create("compile${fixture.name.capitalize()}Jar", Jar)
 		this.project.configure(compileFixturesTask) {
 			group this.project.LIVINGDOC_TASKS_GROUP
@@ -165,19 +164,17 @@ class LivingDocPlugin implements Plugin<Project> {
 
 	/**
 	 * Creates a freeze specification task pro configured repository
-	 * @param repository
-	 * @return
 	 */
-	private createFreezeTask(RepositoryDsl repository, RepositoryFixtureFilterDsl fixtureFilter) {
-		FreezeTask task = this.project.tasks.create("freeze${repository.name.capitalize()}${fixtureFilter.path.capitalize()}Specs", FreezeTask)
+	private createFreezeTask(RepositoryDsl repository, RepositorySortFilterDsl fixtureFilter) {
+		FreezeSpecifications task = this.project.tasks.create("freeze${repository.name.capitalize()}${fixtureFilter.path.capitalize()}Specs", FreezeSpecifications)
 		this.project.configure(task) {
 			group this.project.LIVINGDOC_TASKS_GROUP
 			description "Freezes the LivingDoc specifications of ${repository.name} repository"
 			repositoryUrl repository.url
 			repositoryUid repository.uid
 			repositoryImplementation repository.implementation
-			freezeDirectory repository.freezeDirectory
-			specificationsFilter = fixtureFilter
+			freezeDirectory repository.freezeDirectory.absolutePath
+			specificationsFilter fixtureFilter
 		}
 		logger.info("Task {} created for repository {}", task, repository.name)
 	}
@@ -185,7 +182,7 @@ class LivingDocPlugin implements Plugin<Project> {
 	/**
 	 * Creates a run task per fixture configuration
 	 */
-	private ExecLivingdoc createExecLivingdocTasks(Jar compileFixturesTask, FreezeTask freezeTaskForFixture, FixtureDsl fixture) {
+	private ExecLivingdoc createExecLivingdocTasks(Jar compileFixturesTask, FreezeSpecifications freezeTaskForFixture, FixtureDsl fixture) {
 		ExecLivingdoc task = project.tasks.create("run${this.project.LIVINGDOC_SOURCESET_NAME.capitalize()}${fixture.name.capitalize()}", ExecLivingdoc)
 		this.project.configure(task) {
 			group this.project.LIVINGDOC_TASKS_GROUP
@@ -197,62 +194,63 @@ class LivingDocPlugin implements Plugin<Project> {
 			}
 			workingDir fixture.runLivingdocDirectory
 			args fixture.additionalRunArgs ?: []
-			setExecutionClasspath(this.project.files(compileFixturesTask.archivePath).asPath + File.pathSeparator + this.getFixtureSourceSet(fixture).getRuntimeClasspath().asPath)
+			setExecutionClasspath(this.project.files(compileFixturesTask.archivePath).asPath + File.pathSeparator + this.getSourceSetForFixture(fixture).getRuntimeClasspath().asPath)
 			runnerClass fixture.livingDocRunner
 			systemUnderDevelopment fixture.systemUnderDevelopment + ';' + fixture.systemUnterTest
 			specificationsDir fixture.specsDirectory.path
 			reportsDir fixture.reportsDirectory.path
 			xmlReports (fixture.reportsType != null && fixture.reportsType.equals("xml"))
 		}
-		logger.info("Task {} created for sourceSet {}", task, this.getFixtureSourceSet(fixture))
+		logger.info("Task {} created for sourceSet {}", task, this.getSourceSetForFixture(fixture))
 		return task
 	}
 
-	private Task checkFixturePrerequisite(FixtureDsl fixture, Map<RepositoryFixtureFilterDsl, RepositoryDsl> repositoryFixtureFilters) {
+	private Task checkFixturePrerequisite(FixtureDsl fixture, Map<RepositorySortFilterDsl, RepositoryDsl> repositorySortFilters) {
 		if (!fixture.fixtureSourceDirectory || !fixture.specsDirectory || !fixture.systemUnderDevelopment) {
 			throw new Exception("Some of the required attributes (fixtureSourceDirectory, specsDirectory, systemUnderDevelopment) from ${fixture.name} are empty!")
 		}
 		def repository = null
 		def filter = null
-		repositoryFixtureFilters.find {
-			logger.debug("Search for matching fixture path \"{}\" within the repositoryFixtureFilters \"{}\"", fixture.specsDirectory.path, this.project.file(it.value.freezeDirectory.path + File.separator + it.key.path).path)
-			fixture.specsDirectory.path.equals(this.project.file(it.value.freezeDirectory.path + File.separator + it.key.path).path)
+		// search for a path which is used for freezing the specifications from a repository and it matches a fixture specs directory path
+		repositorySortFilters.find {
+			logger.info("Check whether the fixture \"{}\" specification path ({}) match to a path defined into the repository sort filter ({})", fixture.name, fixture.specsDirectory.path, this.project.file(it.value.freezeDirectory.path + File.separator + it.key.path).path)
+			fixture.specsDirectory.path == this.project.file(it.value.freezeDirectory.path + File.separator + it.key.path).path
 		}?.each {
 			repository = it.value
 			filter = it.key
 		}
+
 		//TODO fixtureRepositoryName should contains only one arg, ambiguous argument error is more that one
 		if (repository && filter) {
-			logger.info("Found fixture filter {} for repository {}", filter.path, repository.name)
+			logger.info("Found matching filter for fixture {} and for repository {} with filter path {}", fixture.name, repository.name, filter.path)
 			return this.project.tasks.findByName("freeze${repository.name.capitalize()}${filter.path.capitalize()}Specs")
 		} else {
-			// TODO what if there were no filter but the freezeDirectory and the specsDirectory are set?
-			logger.warn("WARNING: The fixture configuration {} specsDirectory path \"{}\" cannot be found in any freeze task configuration", fixture.name, fixture.specsDirectory)
+			logger.warn("WARNING: The specsDirectory ({}) for fixture {} doesn't match any freeze directory of a repository", fixture.specsDirectory, fixture.name )
 			return null
 		}
 	}
 
-	private Map<RepositoryFixtureFilterDsl, RepositoryDsl> getRepositoryFixtureFilters() {
-		def repositoryFixtureFilters = [:]
+	private Map<RepositorySortFilterDsl, RepositoryDsl> getRepositorySortFilters() {
+		def repositorySortFilters = [:]
 		this.repositoriesContainer.each { RepositoryDsl repository ->
 			if (repository.sortfilter.isEmpty()) {
-				RepositoryFixtureFilterDsl fixtureFilter = new RepositoryFixtureFilterDsl()
+				RepositorySortFilterDsl fixtureFilter = new RepositorySortFilterDsl()
 				fixtureFilter.path = ''
 				fixtureFilter.filter = ".*"
-				repositoryFixtureFilters[fixtureFilter] = repository
-				logger.info("Create default fixtureFilter for {}", repository.name)
+				repositorySortFilters[fixtureFilter] = repository
+				logger.info("Create default sort filter for repository {}", repository.name)
 			} else {
-				repository.sortfilter.each { RepositoryFixtureFilterDsl fixtureFilter ->
-					logger.info("Found sort filter for {} with path {} and filter {}", repository.name, fixtureFilter.path, fixtureFilter.filter)
-					repositoryFixtureFilters[fixtureFilter] = repository
+				repository.sortfilter.each { RepositorySortFilterDsl sortFilter ->
+					logger.info("Found sort filter for repository {} with path {} and filter {}", repository.name, sortFilter.path, sortFilter.filter)
+					repositorySortFilters[sortFilter] = repository
 				}
 
 			}
 		}
-		return repositoryFixtureFilters
+		return repositorySortFilters
 	}
 
-	private SourceSet getFixtureSourceSet(FixtureDsl fixture) {
-		return this.project.sourceSets.getByName("${this.project.LIVINGDOC_SOURCESET_NAME}${fixture.name.capitalize()}")
+	private SourceSet getSourceSetForFixture(FixtureDsl fixture) {
+		return this.project.sourceSets.getByName((this.project.LIVINGDOC_SOURCESET_NAME as String) + fixture.name.capitalize())
 	}
 }

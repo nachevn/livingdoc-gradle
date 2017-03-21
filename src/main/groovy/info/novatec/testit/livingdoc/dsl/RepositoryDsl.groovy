@@ -17,7 +17,7 @@ class RepositoryDsl {
 
   public File freezeDirectory
 
-  public NamedDomainObjectContainer<RepositoryFixtureFilterDsl> sortfilter
+  public NamedDomainObjectContainer<RepositorySortFilterDsl> sortfilter
 
   public RepositoryDsl(String name, Project project) {
     this.name = name
