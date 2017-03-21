@@ -23,15 +23,15 @@ class FixtureDsl {
 
   public String systemUnderDevelopment = 'info.novatec.testit.livingdoc.systemunderdevelopment.DefaultSystemUnderDevelopment'
 
-  public String reportsType
-
   public String systemUnterTest
+
+  public String reportsType
 
   public String livingDocRunner = 'info.novatec.testit.livingdoc.runner.Main'
 
   public List<String> additionalRunArgs
 
-  public String additionalRunClasspath
+  public FileCollection additionalRunClasspath
 
   public Boolean debug = false
 

@@ -1,6 +1,6 @@
 package info.novatec.testit.livingdoc.tasks
 
-import info.novatec.testit.livingdoc.conventions.FreezeTaskConvention
+import info.novatec.testit.livingdoc.tasks.conventions.FreezeTaskConvention
 import info.novatec.testit.livingdoc.document.Document
 import info.novatec.testit.livingdoc.dsl.RepositoryFixtureFilterDsl
 import info.novatec.testit.livingdoc.report.FileReportGenerator
