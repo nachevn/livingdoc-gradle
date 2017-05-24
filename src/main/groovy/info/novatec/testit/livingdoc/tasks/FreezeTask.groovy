@@ -6,12 +6,20 @@ import info.novatec.testit.livingdoc.dsl.RepositoryFixtureFilterDsl
 import info.novatec.testit.livingdoc.report.FileReportGenerator
 import info.novatec.testit.livingdoc.report.Report
 import info.novatec.testit.livingdoc.repository.DocumentRepository
-import info.novatec.testit.livingdoc.utils.Repository;
+import info.novatec.testit.livingdoc.server.LivingDocServerException
+import info.novatec.testit.livingdoc.server.domain.RepositoryType
+import info.novatec.testit.livingdoc.server.domain.Repository
+import info.novatec.testit.livingdoc.server.rest.LivingDocRestClient
+
 
 import org.gradle.api.DefaultTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.ParallelizableTask
 import org.gradle.api.tasks.TaskAction
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
+import org.springframework.web.client.RestTemplate
+
+import java.nio.charset.StandardCharsets
 
 @ParallelizableTask
 class FreezeTask extends DefaultTask {
@@ -48,11 +56,21 @@ class FreezeTask extends DefaultTask {
 
         logger.info("Start freezing specifications from ${repositoryUrl} to directory ${freezeDirectory.path}${File.separator}${specificationsFilter.path} with repositoryUid ${repositoryUid}.")
 
-        Repository repository = new Repository();
-        repository.setType(repositoryImplementation);
-        repository.setRoot(repositoryUrl);
+        LivingDocRestClient livingDocRestClient = new LivingDocRestClient(repositoryUrl, "nachevn", "geheim123");
+        println "Test connection"
+        println livingDocRestClient.testConnection(null, null)
 
-        this.freeze(repository.getDocumentRepository(), specsFreezeDirectory)
+        Repository repository = convertToRepository("Confluence-LIVINGDOCDEMO", "Test", repositoryUrl, repositoryImplementation);
+
+        DocumentRepository documentRepository = repository.asDocumentRepository(this.getClass().getClassLoader(), "nachevn", "gemeihm123")
+
+        logger.lifecycle("Here: {}<-", documentRepository.listDocuments("Confluence-LIVINGDOCDEMO"))
+
+        info.novatec.testit.livingdoc.utils.Repository repositoryOld = new info.novatec.testit.livingdoc.utils.Repository();
+        repositoryOld.setType(repositoryImplementation);
+        repositoryOld.setRoot(repositoryUrl);
+
+        this.freeze(repositoryOld.getDocumentRepository(), specsFreezeDirectory)
 
         logger.info("Freezing from specifications completed.")
 
@@ -102,5 +120,18 @@ class FreezeTask extends DefaultTask {
 
     private boolean dirEmpty(File dir) {
         return dir.exists() && dir.directory && (dir.list() as List).empty
+    }
+
+    private Repository convertToRepository(String repositoryUID, String repositoryName, String repositoryURL, String implementation) {
+
+        Repository repository = Repository.newInstance(repositoryUID);
+        repository.setName(repositoryName);
+        repository.setBaseTestUrl(repositoryURL);
+        logger.lifecycle("Set repositoryUID {} for repositoryName {} and repositoryURL {}", repositoryUID, repositoryName, repositoryURL)
+        RepositoryType repositoryType = new RepositoryType();
+        repositoryType.setClassName(implementation);
+        logger.lifecycle("Set repository implementation {}", implementation)
+        repository.setType(repositoryType);
+        return repository;
     }
 }

@@ -3,9 +3,9 @@
 ##############################################################################
 ## Change the GRADLE_USER_HOME path to the current folder
 ##############################################################################
-GRADLE_USER_HOME=$(pwd)
-GRADLE_USER_HOME+="/.gradle"
-export GRADLE_USER_HOME=${GRADLE_USER_HOME}
+#GRADLE_USER_HOME=$(pwd)
+#GRADLE_USER_HOME+="/.gradle"
+# export GRADLE_USER_HOME=${GRADLE_USER_HOME}
 
 ##############################################################################
 ##
